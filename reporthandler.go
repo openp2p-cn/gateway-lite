@@ -62,19 +62,16 @@ func (h *reportHandler) handleMessage(ctx *msgContext) error {
 			gLog.Printf(LvERROR, "wrong MsgReportConnect:%s", err)
 			return err
 		}
-		if req.Error == "" {
-			gLog.Println(LvINFO, "MsgReportConnect OK:", wsSess.node, string(ctx.msg[openP2PHeaderSize:]))
-		} else {
-			gLog.Println(LvERROR, "MsgReportConnect Error:", wsSess.node, string(ctx.msg[openP2PHeaderSize:]))
-		}
-
 		resultMtx.Lock()
 		connectResult[req.Error]++
 		if req.Error == "" {
+			gLog.Println(LvINFO, "MsgReportConnect OK:", wsSess.node, string(ctx.msg[openP2PHeaderSize:]))
 			connectResult["totalP2PConnectOK"]++
+		} else {
+			gLog.Println(LvERROR, "MsgReportConnect Error:", wsSess.node, string(ctx.msg[openP2PHeaderSize:]))
+			wsSess.failNodes.Store(nodeNameToID(req.PeerNode), time.Now())
 		}
 		resultMtx.Unlock()
-		wsSess.failNodes.Store(nodeNameToID(req.PeerNode), time.Now())
 	default:
 		return nil
 	}

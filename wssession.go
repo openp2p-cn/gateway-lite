@@ -61,7 +61,8 @@ func (mgr *sessionMgr) run() {
 	r := gin.New()
 	r.Use(gin.Recovery())
 	r.StaticFS("/files", gin.Dir("/var/openp2p", false))
-	r.GET("/openp2p/v1/login", mgr.handleLogin)
+	r.GET("/openp2p/v1/login", mgr.handleLogin) // deprecated
+	r.GET("/api/v1/login", mgr.handleLogin)
 
 	go r.RunTLS(fmt.Sprintf(":%d", WsPort), "api.crt", "api.key")
 	statTimer := time.NewTicker(time.Minute)

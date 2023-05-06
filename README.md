@@ -2,6 +2,16 @@
 Run your self-hosting openp2p gateway with **`4 STEP`**.
 It demonstrates how to YOUR-PC1--->YOUR-PC2
 
+Firewall rules
+
+| Protocol      | Port |
+| --------- | -----:|
+| TCP  | 27180 |
+| TCP     |   27181 |
+| TCP      |    27183 |
+| UDP      |    27182 |
+| UDP      |    27183 |
+
 ## 1. Run gateway program
 ### Run with docker(Recommend)
 ```

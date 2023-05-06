@@ -54,6 +54,9 @@ func (h *relayHandler) handleMessage(ctx *msgContext) error {
 			ts := v.(time.Time)
 			if ts.After(time.Now().Add(-time.Hour)) { // count within 1h failure
 				failNum++
+				if failNum > MaxDirectTry {
+					return false
+				}
 			}
 			return true
 		})

@@ -5,4 +5,3 @@ openp2p-gateway
 openp2p-gateway.exe
 *.log*
 vendor/
-.vscode/
