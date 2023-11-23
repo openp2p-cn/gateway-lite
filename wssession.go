@@ -14,6 +14,7 @@ import (
 
 type wssSession struct {
 	conn            *websocket.Conn
+	wsMtx           sync.Mutex // avoid concurrent write to websocket connection
 	writeCh         chan []byte
 	rspCh           chan []byte
 	running         bool
@@ -127,6 +128,7 @@ func (mgr *sessionMgr) handleLogin(c *gin.Context) {
 			Detail: "Invalid token",
 			Ts:     0,
 		})
+		return
 	}
 	mgr.allSessionsMtx.Lock()
 	mgr.allSessions[sess.nodeID] = sess
@@ -151,7 +153,10 @@ func (sess *wssSession) writeLoop() {
 		if !ok {
 			continue
 		}
-		if err := sess.conn.WriteMessage(websocket.BinaryMessage, msg); err != nil {
+		sess.wsMtx.Lock()
+		err := sess.conn.WriteMessage(websocket.BinaryMessage, msg)
+		sess.wsMtx.Unlock()
+		if err != nil {
 			gLog.Printf(LvERROR, "session %s write failed:%s", sess.node, err)
 			break
 		}
@@ -199,9 +204,11 @@ func (sess *wssSession) write(mainType uint16, subType uint16, packet interface{
 func (sess *wssSession) writeSync(mainType uint16, subType uint16, packet interface{}) error {
 	msg, err := newMessage(mainType, subType, packet)
 	if err == nil && sess.running {
+		sess.wsMtx.Lock()
 		if err := sess.conn.WriteMessage(websocket.BinaryMessage, msg); err != nil {
 			gLog.Printf(LvERROR, "session %s write failed:%s", sess.node, err)
 		}
+		sess.wsMtx.Unlock()
 	}
 	return nil
 }
