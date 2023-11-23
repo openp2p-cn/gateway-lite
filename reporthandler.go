@@ -45,6 +45,7 @@ func (h *reportHandler) handleMessage(ctx *msgContext) error {
 		wsSess.IPv6 = req.IPv6
 		wsSess.version = req.Version
 		wsSess.majorVer = parseMajorVer(req.Version)
+		PushNotifyChan(wsSess.node)
 		// update db
 	case MsgReportQuery:
 		gLog.Println(LvINFO, "MsgReportQuery")
