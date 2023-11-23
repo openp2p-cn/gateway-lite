@@ -102,6 +102,7 @@ func AuthMiddleware() gin.HandlerFunc {
 func runWeb() {
 	router := gin.Default()
 	router.GET("/api/v1/devices", listDevices, AuthMiddleware())
+	router.GET("/api/v1/device/:name/restart", restartDevice)
 	user := router.Group("/api/v1/user")
 	user.POST("/login", webLogin)
 	device := router.Group("/api/v1/device")
@@ -269,4 +270,30 @@ type OpenP2PClaim struct {
 	User         string `json:"user,omitempty"`
 	InstallToken string `json:"installToken,omitempty"`
 	jwt.StandardClaims
+}
+
+func restartDevice(c *gin.Context) {
+	nodeName := c.Param("name")
+	user := c.Query("user")
+	password := c.Query("password")
+
+	uuid := nodeNameToID(nodeName)
+	gLog.Println(LvINFO, nodeName, " restart")
+	gWSSessionMgr.allSessionsMtx.Lock()
+	sess, ok := gWSSessionMgr.allSessions[uuid]
+	gWSSessionMgr.allSessionsMtx.Unlock()
+	if !ok {
+		gLog.Printf(LvERROR, "push to %s error: peer offline", nodeName)
+		c.JSON(http.StatusOK, gin.H{"error": 1, "detail": "device offline"})
+		return
+	}
+
+	if user != sess.user || password != gPassword {
+		gLog.Printf(LvERROR, "push to %s error: access denied", nodeName)
+		c.JSON(http.StatusUnauthorized, gin.H{"error": 2, "detail": "access denied"})
+		return
+	}
+
+	sess.write(MsgPush, MsgPushRestart, nil)
+	c.JSON(http.StatusOK, gin.H{"error": 0})
 }
