@@ -40,7 +40,7 @@ func (h *loginHandler) handleMessage(ctx *msgContext) error {
 		}
 	case MsgHeartbeat:
 		wsSess.activeTime = time.Now()
-		wsSess.writeBuf(ctx.msg)
+		wsSess.writeBuff(ctx.msg)
 		// gLog.Printf(LvINFO, "%s heartbeat ok", wsSess.node)
 	default:
 		return nil
