@@ -37,8 +37,10 @@ func (h *pushHandler) handleMessage(ctx *msgContext) error {
 	}
 	gLog.Printf(LvDEBUG, "%d push to %d", pushHead.From, pushHead.To)
 	if !isSupportMsg(head.SubType) {
-		rsp := PushRsp{Error: 1, Detail: "push denied: unSupported msg "}
-		fromSess.write(head.MainType, MsgPushRsp, rsp)
+		rsp, _ := json.Marshal(PushRsp{Error: 1, Detail: "push denied: unSupported msg "})
+		rsp = append(ctx.msg[:openP2PHeaderSize+PushHeaderSize], rsp...)
+		_ = copy(rsp, encodeHeader(head.MainType, MsgPushRsp, uint32(len(rsp)-openP2PHeaderSize)))
+		fromSess.writeBuff(rsp)
 		return errors.New("push denied")
 	}
 	gWSSessionMgr.allSessionsMtx.Lock()
@@ -46,8 +48,10 @@ func (h *pushHandler) handleMessage(ctx *msgContext) error {
 	gWSSessionMgr.allSessionsMtx.Unlock()
 	if !ok {
 		gLog.Printf(LvERROR, "%d push to %d error: peer offline", pushHead.From, pushHead.To)
-		rsp := PushRsp{Error: 1, Detail: "peer offline"}
-		fromSess.write(head.MainType, MsgPushRsp, rsp)
+		rsp, _ := json.Marshal(PushRsp{Error: 1, Detail: "peer offline"})
+		rsp = append(ctx.msg[:openP2PHeaderSize+PushHeaderSize], rsp...)
+		_ = copy(rsp, encodeHeader(head.MainType, MsgPushRsp, uint32(len(rsp)-openP2PHeaderSize)))
+		fromSess.writeBuff(rsp)
 		return errors.New("peer offline")
 	}
 	if head.SubType == MsgPushConnectReq {
@@ -62,8 +66,10 @@ func (h *pushHandler) handleMessage(ctx *msgContext) error {
 		t := totp.TOTP{Step: totp.RelayTOTPStep}
 		if !(t.Verify(req.Token, toSess.token, time.Now().Unix()) || (toSess.token == req.FromToken)) { // (toSess.token == req.FromToken) is deprecated
 			gLog.Printf(LvERROR, "%s --- %s MsgPushConnectReq push denied", req.From, toSess.node)
-			rsp := PushRsp{Error: 1, Detail: "MsgPushConnectReq push denied"}
-			fromSess.write(head.MainType, MsgPushRsp, rsp)
+			rsp, _ := json.Marshal(PushRsp{Error: 1, Detail: "MsgPushConnectReq push denied"})
+			rsp = append(ctx.msg[:openP2PHeaderSize+PushHeaderSize], rsp...)
+			_ = copy(rsp, encodeHeader(head.MainType, MsgPushRsp, uint32(len(rsp)-openP2PHeaderSize)))
+			fromSess.writeBuff(rsp)
 			return errors.New("push denied")
 		}
 		// cache push permission 60s
@@ -87,14 +93,18 @@ func (h *pushHandler) handleMessage(ctx *msgContext) error {
 		}
 		if !granted {
 			gLog.Printf(LvERROR, "%d --- %d push denied", pushHead.From, pushHead.To)
-			rsp := PushRsp{Error: 1, Detail: "push denied"}
-			fromSess.write(head.MainType, MsgPushRsp, rsp)
+			rsp, _ := json.Marshal(PushRsp{Error: 1, Detail: "push denied"})
+			rsp = append(ctx.msg[:openP2PHeaderSize+PushHeaderSize], rsp...)
+			_ = copy(rsp, encodeHeader(head.MainType, MsgPushRsp, uint32(len(rsp)-openP2PHeaderSize)))
+			fromSess.writeBuff(rsp)
 			return errors.New("push denied")
 		}
 	}
 	toSess.writeBuff(ctx.msg)
-	rsp := PushRsp{Error: 0, Detail: fmt.Sprintf("push msgType %d,%d to %d ok", head.MainType, head.SubType, pushHead.From)}
-	fromSess.write(head.MainType, MsgPushRsp, rsp)
+	rsp, _ := json.Marshal(PushRsp{Error: 0, Detail: fmt.Sprintf("push msgType %d,%d to %d ok", head.MainType, head.SubType, pushHead.From)})
+	rsp = append(ctx.msg[:openP2PHeaderSize+PushHeaderSize], rsp...)
+	_ = copy(rsp, encodeHeader(head.MainType, MsgPushRsp, uint32(len(rsp)-openP2PHeaderSize)))
+	fromSess.writeBuff(rsp)
 	return nil
 }
 
