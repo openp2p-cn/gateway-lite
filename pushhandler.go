@@ -7,8 +7,6 @@ import (
 	"errors"
 	"fmt"
 	"time"
-
-	"github.com/openp2p-cn/totp"
 )
 
 type pushHandler struct {
@@ -50,28 +48,41 @@ func (h *pushHandler) handleMessage(ctx *msgContext) error {
 		fromSess.write(head.MainType, MsgPushRsp, rsp)
 		return errors.New("peer offline")
 	}
-	if head.SubType == MsgPushConnectReq {
-		// verify user/password
-		req := PushConnectReq{}
-		err := json.Unmarshal(ctx.msg[openP2PHeaderSize+PushHeaderSize:], &req)
-		if err != nil {
-			gLog.Printf(LvERROR, "wrong MsgPushConnectReq:%s", err)
-			return err
+	if isByPassMsg(head.SubType) {
+		switch head.SubType {
+		case MsgPushConnectReq:
+			gLog.Printf(LvINFO, "%s is connecting to %s...", fromSess.node, toSess.node)
+			/*
+				// verify user/password
+				t := totp.TOTP{Step: totp.RelayTOTPStep}
+				if !(t.Verify(req.Token, toSess.token, time.Now().Unix()) || (toSess.token == req.FromToken)) { // (toSess.token == req.FromToken) is deprecated
+					gLog.Printf(LvERROR, "%s --- %s MsgPushConnectReq push denied", req.From, toSess.node)
+					rsp := PushRsp{Error: 1, Detail: "MsgPushConnectReq push denied"}
+					fromSess.write(head.MainType, MsgPushRsp, rsp)
+					return errors.New("push denied")
+				}
+			*/
+		case MsgPushConnectRsp:
+			// check rsp.Error for permission
+			var rsp PushConnectRsp
+			err := json.Unmarshal(ctx.msg[openP2PHeaderSize+PushHeaderSize:], &rsp)
+			if err != nil {
+				gLog.Printf(LvERROR, "wrong MsgPushConnectRsp:%s", err)
+				return err
+			}
+			if rsp.Error&0xFF == 0 { // allow more success code
+				// cache push permission 60s
+				gWSSessionMgr.pushPermission.Store(pushHead.To, &pushNodeInfo{pushHead.From, time.Now().Add(time.Minute)})
+				gWSSessionMgr.pushPermission.Store(pushHead.From, &pushNodeInfo{pushHead.To, time.Now().Add(time.Minute)})
+				// TODO: clear cache
+			} else {
+				gLog.Printf(LvWARN, "%s --- %s connect error %d: %s", rsp.To, rsp.From, rsp.Error, rsp.Detail)
+			}
+		case MsgPushAPPKey:
+			gLog.Println(LvDEBUG, "sync app key")
+		default:
+			gLog.Println(LvWARN, "unknown by pass msg ", head.SubType)
 		}
-		gLog.Printf(LvINFO, "%s is connecting to %s...", req.From, toSess.node)
-		t := totp.TOTP{Step: totp.RelayTOTPStep}
-		if !(t.Verify(req.Token, toSess.token, time.Now().Unix()) || (toSess.token == req.FromToken)) { // (toSess.token == req.FromToken) is deprecated
-			gLog.Printf(LvERROR, "%s --- %s MsgPushConnectReq push denied", req.From, toSess.node)
-			rsp := PushRsp{Error: 1, Detail: "MsgPushConnectReq push denied"}
-			fromSess.write(head.MainType, MsgPushRsp, rsp)
-			return errors.New("push denied")
-		}
-		// cache push permission 60s
-		gWSSessionMgr.pushPermission.Store(pushHead.From, &pushNodeInfo{pushHead.To, time.Now().Add(time.Minute)})
-		gWSSessionMgr.pushPermission.Store(pushHead.To, &pushNodeInfo{pushHead.From, time.Now().Add(time.Minute)})
-		// TODO: clear cache
-	} else if isByPassMsg(head.SubType) {
-		gLog.Println(LvDEBUG, "sync app key")
 	} else {
 		// verify push permission
 		// verify from as key
@@ -113,5 +124,7 @@ func isSupportMsg(msgType uint16) bool {
 }
 
 func isByPassMsg(msgType uint16) bool {
-	return msgType == MsgPushAPPKey
+	return msgType == MsgPushConnectReq ||
+		msgType == MsgPushConnectRsp ||
+		msgType == MsgPushAPPKey
 }
